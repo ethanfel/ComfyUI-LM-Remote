@@ -36,7 +36,7 @@ Clone into your ComfyUI `custom_nodes/` directory:
 
 ```bash
 cd /path/to/ComfyUI/custom_nodes/
-git clone git@192.168.1.1:Ethanfel/ComfyUI-LM-Remote.git
+git clone https://github.com/ethanfel/ComfyUI-LM-Remote.git
 ```
 
 ## Configuration
