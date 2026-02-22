@@ -5,9 +5,8 @@ Registered as an aiohttp middleware on PromptServer.instance.app.  It intercepts
 requests matching known LoRA Manager URL prefixes and proxies them to the remote
 Docker instance.  Non-matching requests fall through to the regular ComfyUI router.
 
-Routes that use ``PromptServer.instance.send_sync()`` are explicitly excluded
-from proxying so the local original LoRA Manager handler can broadcast events
-to the local ComfyUI frontend.
+Routes that use ``send_sync`` are handled locally so that events are broadcast
+to the local ComfyUI frontend (the remote instance has no connected browsers).
 """
 from __future__ import annotations
 
@@ -18,6 +17,7 @@ import aiohttp
 from aiohttp import web, WSMsgType
 
 from .config import remote_config
+from .remote_client import RemoteLoraClient
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,7 @@ _PROXY_PREFIXES = (
     "/loras_static/",
     "/locales/",
     "/example_images_static/",
+    "/extensions/ComfyUI-Lora-Manager/",
 )
 
 # Page routes served by the standalone LoRA Manager web UI
@@ -47,21 +48,134 @@ _WS_ROUTES = {
     "/ws/init-progress",
 }
 
-# Routes that call send_sync on the remote side — these are NOT proxied.
-# Instead they fall through to the local original LoRA Manager handler,
-# which broadcasts events to the local ComfyUI frontend.  The remote
-# handler would broadcast to its own (empty) frontend, which is useless.
-#
-# These routes:
-#   /api/lm/loras/get_trigger_words  -> trigger_word_update event
-#   /api/lm/update-lora-code         -> lora_code_update event
-#   /api/lm/update-node-widget       -> lm_widget_update event
-#   /api/lm/register-nodes           -> lora_registry_refresh event
-_SEND_SYNC_SKIP_ROUTES = {
-    "/api/lm/loras/get_trigger_words",
-    "/api/lm/update-lora-code",
-    "/api/lm/update-node-widget",
-    "/api/lm/register-nodes",
+# ---------------------------------------------------------------------------
+# Local handlers for routes that need send_sync (event broadcasting)
+# ---------------------------------------------------------------------------
+# These routes are NOT proxied.  They are handled locally so that events
+# reach the local ComfyUI frontend via PromptServer.send_sync().
+
+
+def _get_prompt_server():
+    """Lazily import PromptServer to avoid circular imports at module level."""
+    from server import PromptServer  # type: ignore
+    return PromptServer.instance
+
+
+def _parse_node_id(entry):
+    """Parse a node ID entry that can be int, string, or dict.
+
+    Returns (parsed_id, graph_id_or_None).
+    """
+    node_identifier = entry
+    graph_identifier = None
+    if isinstance(entry, dict):
+        node_identifier = entry.get("node_id")
+        graph_identifier = entry.get("graph_id")
+
+    try:
+        parsed_id = int(node_identifier)
+    except (TypeError, ValueError):
+        parsed_id = node_identifier
+
+    return parsed_id, graph_identifier
+
+
+async def _handle_get_trigger_words(request: web.Request) -> web.Response:
+    """Fetch trigger words from remote and broadcast via send_sync."""
+    try:
+        data = await request.json()
+        lora_names = data.get("lora_names", [])
+        node_ids = data.get("node_ids", [])
+
+        client = RemoteLoraClient.get_instance()
+        server = _get_prompt_server()
+
+        # Collect trigger words for ALL loras into a single combined list,
+        # then broadcast the same combined text to ALL node_ids.
+        all_trigger_words = []
+        for lora_name in lora_names:
+            _, trigger_words = await client.get_lora_info(lora_name)
+            all_trigger_words.extend(trigger_words)
+
+        trigger_words_text = ",, ".join(all_trigger_words) if all_trigger_words else ""
+
+        for entry in node_ids:
+            parsed_id, graph_id = _parse_node_id(entry)
+            payload = {"id": parsed_id, "message": trigger_words_text}
+            if graph_id is not None:
+                payload["graph_id"] = str(graph_id)
+            server.send_sync("trigger_word_update", payload)
+
+        return web.json_response({"success": True})
+    except Exception as exc:
+        logger.error("[LM-Remote] Error getting trigger words: %s", exc)
+        return web.json_response(
+            {"success": False, "error": str(exc)}, status=500
+        )
+
+
+async def _handle_update_lora_code(request: web.Request) -> web.Response:
+    """Parse lora code update and broadcast via send_sync."""
+    data = await request.json()
+    node_ids = data.get("node_ids")
+    lora_code = data.get("lora_code", "")
+    mode = data.get("mode", "append")
+
+    server = _get_prompt_server()
+
+    if node_ids is None:
+        # Broadcast to all nodes
+        server.send_sync(
+            "lora_code_update",
+            {"id": -1, "lora_code": lora_code, "mode": mode},
+        )
+    else:
+        for entry in node_ids:
+            parsed_id, graph_id = _parse_node_id(entry)
+            payload = {"id": parsed_id, "lora_code": lora_code, "mode": mode}
+            if graph_id is not None:
+                payload["graph_id"] = str(graph_id)
+            server.send_sync("lora_code_update", payload)
+
+    return web.json_response({"success": True})
+
+
+async def _handle_update_node_widget(request: web.Request) -> web.Response:
+    """Parse widget update and broadcast via send_sync."""
+    data = await request.json()
+    widget_name = data.get("widget_name")
+    value = data.get("value")
+    node_ids = data.get("node_ids")
+
+    if not widget_name or value is None or not node_ids:
+        return web.json_response(
+            {"error": "widget_name, value, and node_ids are required"},
+            status=400,
+        )
+
+    server = _get_prompt_server()
+
+    for entry in node_ids:
+        parsed_id, graph_id = _parse_node_id(entry)
+        payload = {"id": parsed_id, "widget_name": widget_name, "value": value}
+        if graph_id is not None:
+            payload["graph_id"] = str(graph_id)
+        server.send_sync("lm_widget_update", payload)
+
+    return web.json_response({"success": True})
+
+
+async def _handle_register_nodes(request: web.Request) -> web.Response:
+    """No-op handler — node registration is not needed in remote mode."""
+    return web.json_response({"success": True, "message": "No-op in remote mode"})
+
+
+# Dispatch table for send_sync routes
+_SEND_SYNC_HANDLERS = {
+    "/api/lm/loras/get_trigger_words": _handle_get_trigger_words,
+    "/api/lm/update-lora-code": _handle_update_lora_code,
+    "/api/lm/update-node-widget": _handle_update_node_widget,
+    "/api/lm/register-nodes": _handle_register_nodes,
 }
 
 # Shared HTTP session for proxied requests (connection pooling)
@@ -206,10 +320,11 @@ async def lm_remote_proxy_middleware(request: web.Request, handler):
 
     path = request.path
 
-    # Routes that use send_sync must NOT be proxied — let the local
-    # original LoRA Manager handle them so events reach the local browser.
-    if path in _SEND_SYNC_SKIP_ROUTES:
-        return await handler(request)
+    # Routes that need send_sync are handled locally so events reach
+    # the local browser (the remote instance has no connected browsers).
+    local_handler = _SEND_SYNC_HANDLERS.get(path)
+    if local_handler is not None:
+        return await local_handler(request)
 
     # WebSocket routes
     if _is_ws_route(path):

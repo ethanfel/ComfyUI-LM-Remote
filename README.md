@@ -14,21 +14,20 @@ When ComfyUI runs on a GPU workstation and LoRA Manager runs in Docker on a NAS 
 ComfyUI Workstation                        NAS (Docker)
 +--------------------------+              +------------------------+
 | ComfyUI                  |              | LoRA Manager           |
-|  +- ComfyUI-Lora-Manager |   HTTP API   |  +- SQLite metadata DB |
-|  |  (widgets + types)    |<------------>|  +- CivitAI sync       |
-|  +- ComfyUI-LM-Remote   |              |  +- Port 8188          |
-|  |  (this package)       |              +------------------------+
-|  +- /mnt/loras/ (NFS)   |                         |
-+--------------------------+                         |
+|  +- ComfyUI-LM-Remote   |   HTTP API   |  +- SQLite metadata DB |
+|  |  (this package)       |<------------>|  +- CivitAI sync       |
+|  +- /mnt/loras/ (NFS)   |              |  +- Port 8188          |
++--------------------------+              +------------------------+
          |                                           |
          +------- Shared NFS/SMB storage ------------+
 ```
 
 ## Prerequisites
 
-- [ComfyUI-Lora-Manager](https://github.com/willmiao/ComfyUI-Lora-Manager) must be installed alongside -- it provides widget JS files and custom widget types
 - A running LoRA Manager instance accessible over the network (e.g., in Docker)
 - Shared storage so both machines see the same LoRA files at compatible paths
+
+> **Note:** The original [ComfyUI-Lora-Manager](https://github.com/willmiao/ComfyUI-Lora-Manager) package is **not required**. Widget JS files and Vue widget types are served from the remote instance via the proxy. You may still install it alongside if you want the original (non-remote) nodes available too.
 
 ## Installation
 
@@ -103,16 +102,17 @@ All nodes appear under the **Lora Manager** category in the ComfyUI node menu, w
 An aiohttp middleware is registered at startup that intercepts requests to LoRA Manager endpoints and forwards them to the remote instance:
 
 **Proxied routes:**
-- `/api/lm/*` -- all REST API endpoints
+- `/api/lm/*` -- all REST API endpoints (except send_sync routes below)
+- `/extensions/ComfyUI-Lora-Manager/*` -- widget JS files and Vue widget bundle
 - `/loras_static/*`, `/locales/*`, `/example_images_static/*` -- static assets
 - `/loras`, `/checkpoints`, `/embeddings`, `/loras/recipes`, `/statistics` -- web UI pages
 - `/ws/fetch-progress`, `/ws/download-progress`, `/ws/init-progress` -- WebSocket connections
 
-**Not proxied** (handled locally to preserve `send_sync` event broadcasting):
-- `/api/lm/loras/get_trigger_words`
-- `/api/lm/update-lora-code`
-- `/api/lm/update-node-widget`
-- `/api/lm/register-nodes`
+**Handled locally** (events broadcast to local browser via `send_sync`):
+- `/api/lm/loras/get_trigger_words` -- fetches trigger words from remote, broadcasts `trigger_word_update`
+- `/api/lm/update-lora-code` -- broadcasts `lora_code_update`
+- `/api/lm/update-node-widget` -- broadcasts `lm_widget_update`
+- `/api/lm/register-nodes` -- no-op in remote mode
 
 ### Remote Metadata
 

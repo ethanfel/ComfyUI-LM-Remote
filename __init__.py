@@ -3,13 +3,15 @@ ComfyUI-LM-Remote — Remote LoRA Manager integration for ComfyUI.
 
 Provides:
 1. A reverse-proxy middleware that forwards all LoRA Manager API/UI/WS
-   requests to a remote Docker instance.
+   requests to a remote Docker instance (including JS widget files).
 2. Remote-aware node classes that fetch metadata via HTTP instead of the
    local ServiceRegistry, while still loading LoRA files from local
    NFS/SMB-mounted paths.
+3. Local send_sync handlers so widget events (trigger words, lora code
+   updates) are broadcast to the local ComfyUI frontend.
 
-Requires the original ComfyUI-Lora-Manager package to be installed alongside
-for its widget JS files and custom widget types.
+Does NOT require the original ComfyUI-Lora-Manager package to be installed.
+Widget JS files and Vue widget types are served from the remote instance.
 """
 from __future__ import annotations
 
