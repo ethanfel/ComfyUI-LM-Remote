@@ -36,6 +36,8 @@ _TEST_CONNECTION_ROUTE = "/api/lm-remote/test-connection"
 _PROXY_HOP_HEADER = "X-LM-Remote-Proxy"
 _MAX_CONFIG_BODY = 64 * 1024
 _MAX_TEST_RESPONSE = 64 * 1024
+_MEDIA_STREAM_CHUNK_SIZE = 64 * 1024
+_MEDIA_IDLE_TIMEOUT = 300
 
 # ---------------------------------------------------------------------------
 # URL prefixes that should be forwarded to the remote LoRA Manager
@@ -616,6 +618,22 @@ def _is_ws_route(path: str) -> bool:
     return path in _WS_ROUTES
 
 
+def _is_streaming_media_route(path: str) -> bool:
+    """Return whether a proxied response must be relayed incrementally."""
+    return path.startswith("/api/lm/previews") or path.startswith(
+        "/example_images_static/"
+    )
+
+
+def _media_request_timeout(snapshot: ConfigSnapshot) -> aiohttp.ClientTimeout:
+    """Allow long playback while still bounding connect and idle stalls."""
+    return aiohttp.ClientTimeout(
+        total=None,
+        sock_connect=min(snapshot.timeout, 30),
+        sock_read=max(snapshot.timeout, _MEDIA_IDLE_TIMEOUT),
+    )
+
+
 async def _proxy_ws(
     request: web.Request, snapshot: ConfigSnapshot
 ) -> web.WebSocketResponse:
@@ -707,7 +725,9 @@ async def _proxy_ws(
     return local_ws
 
 
-async def _proxy_http(request: web.Request, snapshot: ConfigSnapshot) -> web.Response:
+async def _proxy_http(
+    request: web.Request, snapshot: ConfigSnapshot
+) -> web.StreamResponse:
     """Forward an HTTP request to the remote LoRA Manager and return its response."""
     remote_url = f"{snapshot.remote_url}{request.path}"
     if request.query_string:
@@ -735,14 +755,48 @@ async def _proxy_http(request: web.Request, snapshot: ConfigSnapshot) -> web.Res
             headers[k] = v
     headers[_PROXY_HOP_HEADER] = "1"
 
+    streaming_media = _is_streaming_media_route(request.path)
+    downstream: web.StreamResponse | None = None
     try:
         async with _proxy_session_lease(snapshot) as session:
+            request_options = {
+                "method": request.method,
+                "url": remote_url,
+                "headers": headers,
+                "data": body,
+            }
+            if streaming_media:
+                request_options.update(
+                    {
+                        "timeout": _media_request_timeout(snapshot),
+                        "auto_decompress": False,
+                    }
+                )
             async with session.request(
-                method=request.method,
-                url=remote_url,
-                headers=headers,
-                data=body,
+                **request_options,
             ) as resp:
+                if streaming_media:
+                    resp_headers = {}
+                    for k, v in resp.headers.items():
+                        if k.lower() not in (
+                            "transfer-encoding",
+                            "connection",
+                            "set-cookie",
+                        ):
+                            resp_headers[k] = v
+                    downstream = web.StreamResponse(
+                        status=resp.status,
+                        headers=resp_headers,
+                    )
+                    await downstream.prepare(request)
+                    if request.method != "HEAD":
+                        async for chunk in resp.content.iter_chunked(
+                            _MEDIA_STREAM_CHUNK_SIZE
+                        ):
+                            await downstream.write(chunk)
+                    await downstream.write_eof()
+                    return downstream
+
                 resp_body = await resp.read()
                 resp_headers = {}
                 for k, v in resp.headers.items():
@@ -759,6 +813,14 @@ async def _proxy_http(request: web.Request, snapshot: ConfigSnapshot) -> web.Res
                     headers=resp_headers,
                 )
     except Exception as exc:
+        if downstream is not None and downstream.prepared:
+            logger.debug(
+                "[LM-Remote] Media stream ended for %s %s: %s",
+                request.method,
+                request.path,
+                exc,
+            )
+            return downstream
         logger.error(
             "[LM-Remote] Proxy error for %s %s: %s", request.method, request.path, exc
         )

@@ -163,11 +163,36 @@
   background: #101012;
 }
 
-.lmri-preview img {
+.lmri-preview img,
+.lmri-preview video {
   width: 100%;
   height: 100%;
   display: block;
   object-fit: cover;
+}
+
+.lmri-preview video {
+  object-fit: contain;
+}
+
+.lmri-media-blurred {
+  filter: blur(22px) brightness(0.55);
+  transform: scale(1.08);
+}
+
+.lmri-media-reveal {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  padding: 7px 10px;
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 7px;
+  background: rgb(10 10 12 / 82%);
+  color: white;
+  font: inherit;
+  cursor: pointer;
+  transform: translate(-50%, -50%);
 }
 
 .lmri-card-body,
@@ -277,6 +302,191 @@
   color: var(--lmri-text);
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+}
+
+.lmri-shared {
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid var(--lmri-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--lmri-bg) 58%, transparent);
+}
+
+.lmri-shared-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px;
+}
+
+.lmri-shared-header h3,
+.lmri-shared-prompt h4 {
+  margin: 0;
+  color: var(--lmri-text);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.lmri-shared-source {
+  display: block;
+  margin-top: 1px;
+  color: var(--lmri-muted);
+  font-size: 9px;
+}
+
+.lmri-shared-navigation {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.lmri-shared-nav,
+.lmri-copy-button {
+  border: 1px solid var(--lmri-border);
+  border-radius: 6px;
+  background: var(--lmri-panel);
+  color: var(--lmri-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.lmri-shared-nav {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  padding: 0;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.lmri-shared-position {
+  min-width: 29px;
+  color: var(--lmri-muted);
+  font-size: 9px;
+  text-align: center;
+}
+
+.lmri-shared-dots {
+  display: flex;
+  gap: 5px;
+  padding: 8px 9px 0;
+  overflow-x: auto;
+}
+
+.lmri-shared-dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--lmri-muted) 52%, transparent);
+  cursor: pointer;
+}
+
+.lmri-shared-dot.active {
+  background: var(--lmri-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lmri-accent) 28%, transparent);
+}
+
+.lmri-shared-dot:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--lmri-accent) 75%, white 15%);
+  outline-offset: 2px;
+}
+
+.lmri-shared-viewer {
+  position: relative;
+  width: 100%;
+  min-height: 120px;
+  max-height: 360px;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-block: 1px solid var(--lmri-border);
+  background: #101012;
+}
+
+.lmri-shared-viewer img,
+.lmri-shared-viewer video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.lmri-shared-params {
+  padding: 8px 9px 0;
+}
+
+.lmri-shared-prompt {
+  padding: 9px 10px 10px;
+}
+
+.lmri-prompt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.lmri-copy-button {
+  min-width: 48px;
+  padding: 3px 7px;
+  color: var(--lmri-muted);
+  font-size: 9px;
+}
+
+.lmri-copy-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.lmri-shared-prompt-text,
+.lmri-negative-prompt p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--lmri-text);
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.lmri-shared-prompt-text {
+  max-height: 9em;
+  overflow-y: auto;
+}
+
+.lmri-negative-prompt {
+  padding: 0 10px 10px;
+  color: var(--lmri-muted);
+  font-size: 10px;
+}
+
+.lmri-negative-prompt summary {
+  cursor: pointer;
+}
+
+.lmri-negative-prompt p {
+  margin-top: 6px;
+  color: var(--lmri-muted);
+}
+
+.lmri-enrichment-state {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  color: var(--lmri-muted);
+  font-size: 10px;
+}
+
+.lmri-shared-nav:hover,
+.lmri-copy-button:hover,
+.lmri-media-reveal:hover {
+  border-color: color-mix(in srgb, var(--lmri-accent) 75%, var(--lmri-border));
 }
 
 .lmri-actions {

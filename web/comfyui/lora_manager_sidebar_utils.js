@@ -1,5 +1,14 @@
 const WEIGHT_EXTENSION = /\.(?:safetensors|ckpt|pt|pth|bin)$/i;
 const LORA_SYNTAX = /<lora:([^:>]+)(?::[^>]*)?>/gi;
+const VIDEO_EXTENSION = /\.(?:mp4|webm|mov|m4v)$/i;
+const NSFW_LEVELS = {
+  pg: 1,
+  pg13: 2,
+  r: 4,
+  x: 8,
+  xxx: 16,
+  blocked: 32,
+};
 const DISABLED_VALUES = new Set([
   "",
   "none",
@@ -75,6 +84,315 @@ export function normalizeUsageTips(value) {
       value: formatUsageTipValue(entry),
     }))
     .filter((entry) => entry.value !== "");
+}
+
+function decodeMediaPath(value) {
+  let decoded = String(value || "");
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch {
+      break;
+    }
+  }
+  return decoded;
+}
+
+function mediaPath(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  try {
+    const parsed = new URL(text, "http://localhost/");
+    return decodeMediaPath(parsed.searchParams.get("path") || parsed.pathname)
+      .split(/[?#]/, 1)[0]
+      .toLowerCase();
+  } catch {
+    return decodeMediaPath(text).split(/[?#]/, 1)[0].toLowerCase();
+  }
+}
+
+export function isVideoMedia(value, declaredType = "") {
+  const type = String(declaredType || "").trim().toLowerCase();
+  if (type === "video" || type.startsWith("video/")) return true;
+  return VIDEO_EXTENSION.test(mediaPath(value));
+}
+
+function safeMediaReference(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  try {
+    const parsed = new URL(value.trim(), "http://localhost/");
+    return !parsed.username &&
+      !parsed.password &&
+      (parsed.protocol === "http:" || parsed.protocol === "https:")
+      ? value.trim()
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+function stringValue(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function firstString(...values) {
+  for (const value of values) {
+    const text = stringValue(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function objectValue(value) {
+  let parsed = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed
+    : {};
+}
+
+function generationMetadata(item) {
+  const direct = objectValue(item?.meta);
+  return { ...direct, ...objectValue(direct.meta) };
+}
+
+function normalizeNsfwLevel(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value > 0 ? value : null;
+  }
+  if (typeof value !== "string" || !value.trim()) return null;
+  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, "");
+  if (normalized === "unknown") return null;
+  if (normalized in NSFW_LEVELS) return NSFW_LEVELS[normalized];
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+}
+
+function optimizeMediaUrl(value, mediaType) {
+  const safe = safeMediaReference(value);
+  if (!safe) return "";
+  try {
+    const parsed = new URL(safe, "http://localhost/");
+    if (
+      parsed.hostname !== "civitai.com" &&
+      parsed.hostname.endsWith(".civitai.com") &&
+      parsed.pathname.includes("/original=true")
+    ) {
+      const replacement =
+        mediaType === "video"
+          ? "/transcode=true,width=450,optimized=true"
+          : "/width=450,optimized=true";
+      parsed.pathname = parsed.pathname.replace("/original=true", replacement);
+      return parsed.href;
+    }
+  } catch {
+    return safe;
+  }
+  return safe;
+}
+
+function mediaIdentity(item, url) {
+  const id = item?.civitai_image_id ?? item?.id;
+  return id != null && String(id).trim()
+    ? `id:${String(id).trim()}`
+    : `url:${url}`;
+}
+
+function localExampleFile(item, index, exampleFiles) {
+  if (!Array.isArray(exampleFiles) || !exampleFiles.length) return null;
+  if (typeof item?.id === "string" && item.id) {
+    const prefix = `custom_${item.id}`;
+    return exampleFiles.find((file) =>
+      String(file?.name || "").startsWith(prefix)
+    );
+  }
+  return exampleFiles.find((file) => {
+    const match = /(?:^|\/)image_(\d+)\./i.exec(String(file?.name || ""));
+    return match && Number(match[1]) === index;
+  });
+}
+
+function normalizeMediaItem(item, source, localFile = null) {
+  if (!item || typeof item !== "object" || item.downloadFailed) return null;
+  const meta = generationMetadata(item);
+  const rawUrl = firstString(
+    localFile?.path,
+    item.preview_url,
+    item.image_url,
+    item.url
+  );
+  const mediaType = isVideoMedia(
+    rawUrl,
+    localFile?.is_video ? "video" : item.media_type || item.type
+  )
+    ? "video"
+    : "image";
+  const url = optimizeMediaUrl(rawUrl, mediaType);
+  if (!url) return null;
+
+  const prompt = firstString(item.prompt, meta.prompt);
+  const negativePrompt = firstString(
+    item.negative_prompt,
+    item.negativePrompt,
+    meta.negative_prompt,
+    meta.negativePrompt
+  );
+  const sizeLabel = firstString(item.size, meta.Size, meta.size);
+  const sizeMatch = /^(\d+)\s*[x×]\s*(\d+)$/i.exec(sizeLabel);
+  const width = Number(item.width || sizeMatch?.[1]);
+  const height = Number(item.height || sizeMatch?.[2]);
+  const reactionCount = [
+    item.like_count,
+    item.heart_count,
+    item.laugh_count,
+    item.comment_count,
+  ].reduce((sum, value) => {
+    const count = Number(value);
+    return sum + (Number.isFinite(count) && count > 0 ? count : 0);
+  }, 0);
+
+  return {
+    id: mediaIdentity(item, url),
+    source,
+    url,
+    thumbnailUrl: safeMediaReference(item.thumbnail_url),
+    mediaType,
+    prompt,
+    negativePrompt,
+    username: firstString(item.username, item.creator?.username),
+    width: Number.isFinite(width) && width > 0 ? width : null,
+    height: Number.isFinite(height) && height > 0 ? height : null,
+    steps: item.steps ?? meta.steps ?? meta.Steps ?? null,
+    sampler: item.sampler ?? meta.sampler ?? meta.Sampler ?? "",
+    cfgScale:
+      item.cfg_scale ?? meta.cfg_scale ?? meta.cfgScale ?? meta.CFG ?? null,
+    seed: item.seed ?? meta.seed ?? meta.Seed ?? null,
+    denoise: item.denoise ?? meta.denoise ?? null,
+    clipSkip: meta.clip_skip ?? meta.clipSkip ?? null,
+    modelName: firstString(item.model_name, meta.Model, meta.model),
+    baseModel: firstString(
+      item.base_model,
+      item.baseModel,
+      meta.base_model,
+      meta.baseModel
+    ),
+    nsfwLevel: normalizeNsfwLevel(
+      item.nsfwLevel ?? item.nsfw_level ?? item.nsfw
+    ),
+    reactionCount,
+    civitaiImageId: item.civitai_image_id ?? item.id ?? null,
+  };
+}
+
+function missingMediaValue(value) {
+  return value == null || value === "";
+}
+
+function mergeMediaItem(primary, supplement) {
+  const merged = { ...primary };
+  const fillFields = [
+    "thumbnailUrl",
+    "prompt",
+    "negativePrompt",
+    "username",
+    "width",
+    "height",
+    "steps",
+    "sampler",
+    "cfgScale",
+    "seed",
+    "denoise",
+    "clipSkip",
+    "modelName",
+    "baseModel",
+    "civitaiImageId",
+  ];
+  for (const field of fillFields) {
+    if (missingMediaValue(merged[field]) && !missingMediaValue(supplement[field])) {
+      merged[field] = supplement[field];
+    }
+  }
+  if (!String(merged.url).startsWith("/") && String(supplement.url).startsWith("/")) {
+    merged.url = supplement.url;
+  }
+  if (supplement.mediaType === "video") merged.mediaType = "video";
+  const levels = [merged.nsfwLevel, supplement.nsfwLevel].filter(
+    (value) => typeof value === "number" && Number.isFinite(value)
+  );
+  merged.nsfwLevel = levels.length ? Math.max(...levels) : null;
+  merged.reactionCount = Math.max(
+    Number(merged.reactionCount) || 0,
+    Number(supplement.reactionCount) || 0
+  );
+  return merged;
+}
+
+export function mergeCivitaiMetadata(summary, details) {
+  const merged = { ...objectValue(summary) };
+  for (const [key, value] of Object.entries(objectValue(details))) {
+    if (value !== undefined) merged[key] = value;
+  }
+  return merged;
+}
+
+export function normalizeSharedMedia(
+  communityImages,
+  civitaiMetadata,
+  exampleFiles = []
+) {
+  const civitai = objectValue(civitaiMetadata);
+  const regularImages = Array.isArray(civitai.images) ? civitai.images : [];
+  const customImages = Array.isArray(civitai.customImages)
+    ? civitai.customImages
+    : [];
+  const candidates = [
+    ...(Array.isArray(communityImages)
+      ? communityImages.map((item) => [item, "Community creation", null])
+      : []),
+    ...regularImages.map((item, index) => [
+      item,
+      "Civitai example",
+      localExampleFile(item, index, exampleFiles),
+    ]),
+    ...customImages.map((item, index) => [
+      item,
+      "Custom example",
+      localExampleFile(item, regularImages.length + index, exampleFiles),
+    ]),
+  ];
+
+  const indexes = new Map();
+  const media = [];
+  for (const [item, source, localFile] of candidates) {
+    const normalized = normalizeMediaItem(item, source, localFile);
+    if (!normalized) continue;
+    const existingIndex = indexes.get(normalized.id);
+    if (existingIndex != null) {
+      media[existingIndex] = mergeMediaItem(media[existingIndex], normalized);
+      continue;
+    }
+    indexes.set(normalized.id, media.length);
+    media.push(normalized);
+  }
+  return media;
+}
+
+export function normalizeMediaSettings(value) {
+  const settings = objectValue(value);
+  return {
+    blurMatureContent: settings.blur_mature_content !== false,
+    matureBlurLevel:
+      normalizeNsfwLevel(settings.mature_blur_level) ?? NSFW_LEVELS.r,
+    showOnlySfw: settings.show_only_sfw === true,
+  };
 }
 
 export function extractLoraSyntax(value) {

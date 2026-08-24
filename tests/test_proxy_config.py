@@ -4,6 +4,7 @@ import importlib.util
 import json
 import sys
 import types
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
@@ -506,6 +507,103 @@ class FakeSession:
 
     async def close(self):
         self.closed = True
+
+
+@pytest.mark.asyncio
+async def test_media_proxy_streams_range_response_without_buffering(
+    isolated_proxy, modules, monkeypatch
+):
+    proxy, config = isolated_proxy
+    captured = {}
+
+    class UpstreamContent:
+        async def iter_chunked(self, size):
+            assert size == proxy._MEDIA_STREAM_CHUNK_SIZE
+            for chunk in (b"abc", b"def"):
+                yield chunk
+
+    class UpstreamResponse:
+        status = 206
+        headers = {
+            "Content-Type": "video/mp4",
+            "Content-Length": "6",
+            "Content-Range": "bytes 0-5/20",
+            "Accept-Ranges": "bytes",
+            "Set-Cookie": "remote=secret",
+        }
+        content = UpstreamContent()
+        read_called = False
+
+        async def read(self):
+            self.read_called = True
+            raise AssertionError("streaming media must not call read()")
+
+    upstream = UpstreamResponse()
+
+    class RequestContext:
+        async def __aenter__(self):
+            return upstream
+
+        async def __aexit__(self, *_args):
+            return None
+
+    class StreamingSession:
+        def request(self, **kwargs):
+            captured["request"] = kwargs
+            return RequestContext()
+
+    @asynccontextmanager
+    async def fake_lease(snapshot):
+        captured["generation"] = snapshot.generation
+        yield StreamingSession()
+
+    class DownstreamResponse:
+        def __init__(self, *, status, headers):
+            self.status = status
+            self.headers = headers
+            self.prepared = False
+            self.chunks = []
+            self.eof = False
+
+        async def prepare(self, request):
+            self.prepared = True
+            self.request = request
+
+        async def write(self, chunk):
+            self.chunks.append(chunk)
+
+        async def write_eof(self):
+            self.eof = True
+
+    monkeypatch.setattr(proxy, "_proxy_session_lease", fake_lease)
+    monkeypatch.setattr(proxy.web, "StreamResponse", DownstreamResponse)
+    snapshot = modules.config.ConfigSnapshot(
+        config.generation,
+        "http://manager.local:8188",
+        30,
+        (),
+    )
+    request = DummyRequest(
+        path="/api/lm/previews",
+        headers={"Range": "bytes=0-"},
+    )
+
+    response = await proxy._proxy_http(request, snapshot)
+
+    assert response.status == 206
+    assert response.chunks == [b"abc", b"def"]
+    assert response.eof is True
+    assert upstream.read_called is False
+    assert response.headers["Content-Range"] == "bytes 0-5/20"
+    assert response.headers["Accept-Ranges"] == "bytes"
+    assert response.headers["Content-Length"] == "6"
+    assert "Set-Cookie" not in response.headers
+    assert captured["request"]["headers"]["Range"] == "bytes=0-"
+    assert captured["request"]["auto_decompress"] is False
+    timeout = captured["request"]["timeout"]
+    assert timeout.total is None
+    assert timeout.sock_connect == 30
+    assert timeout.sock_read == proxy._MEDIA_IDLE_TIMEOUT
 
 
 @pytest.mark.asyncio

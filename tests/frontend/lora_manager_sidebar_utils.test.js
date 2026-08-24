@@ -5,8 +5,12 @@ import {
   buildExternalLinks,
   extractLoraNames,
   getSelectedGraphNodes,
+  isVideoMedia,
   matchModelItems,
+  mergeCivitaiMetadata,
   normalizeLoraIdentifier,
+  normalizeMediaSettings,
+  normalizeSharedMedia,
   normalizeUsageTips,
 } from "../../web/comfyui/lora_manager_sidebar_utils.js";
 
@@ -29,6 +33,168 @@ test("formats Manager usage presets and hides empty JSON", () => {
   assert.deepEqual(normalizeUsageTips("Use at low strength"), [
     { label: "Note", value: "Use at low strength" },
   ]);
+});
+
+test("detects direct and encoded video preview URLs", () => {
+  assert.equal(
+    isVideoMedia(
+      "/api/lm/previews?path=%2Fmodels%2Floras%2Fexample.MP4"
+    ),
+    true
+  );
+  assert.equal(isVideoMedia("https://example.com/demo.WEBM?download=1"), true);
+  assert.equal(isVideoMedia("https://example.com/media/42", "video"), true);
+  assert.equal(isVideoMedia("https://example.com/still.png"), false);
+  assert.doesNotThrow(() => isVideoMedia("/preview?path=%E0%A4%A"));
+});
+
+test("merges full Civitai metadata without losing resolve fields", () => {
+  assert.deepEqual(
+    mergeCivitaiMetadata(
+      { id: 7, modelId: 9, trainedWords: ["portrait"] },
+      { description: "Full details", images: [{ id: 1 }] }
+    ),
+    {
+      id: 7,
+      modelId: 9,
+      trainedWords: ["portrait"],
+      description: "Full details",
+      images: [{ id: 1 }],
+    }
+  );
+});
+
+test("normalizes community and Civitai media with associated prompts", () => {
+  const media = normalizeSharedMedia(
+    [
+      {
+        civitai_image_id: 10,
+        preview_url:
+          "/api/lm/previews?path=%2Fexamples%2Fcommunity-video.mp4",
+        media_type: "video",
+        prompt: "community prompt",
+        negative_prompt: "community negative",
+        username: "artist",
+        steps: 20,
+        cfg_scale: 4.5,
+        width: 1280,
+        height: 720,
+      },
+    ],
+    {
+      images: [
+        {
+          id: 10,
+          url: "https://example.com/duplicate.mp4",
+          type: "video",
+          nsfwLevel: 16,
+          meta: { prompt: "duplicate prompt" },
+        },
+        {
+          id: 11,
+          url: "https://example.com/still.webp",
+          meta: {
+            meta: {
+              prompt: "example prompt",
+              negativePrompt: "example negative",
+              sampler: "Euler",
+              seed: 12,
+              Size: "640x480",
+              Model: "Example checkpoint",
+              clipSkip: 2,
+            },
+          },
+        },
+      ],
+      customImages: [
+        { id: 12, url: "javascript:alert(1)", meta: { prompt: "unsafe" } },
+        {
+          id: 14,
+          url: "https://user:password@example.com/private.webp",
+          meta: { prompt: "credential leak" },
+        },
+        {
+          id: 13,
+          url: "https://example.com/failed.webp",
+          downloadFailed: true,
+        },
+        {
+          id: "local-one",
+          url: "",
+          meta: { prompt: "local custom prompt" },
+        },
+      ],
+    },
+    [
+      {
+        name: "custom_local-one.webm",
+        path: "/example_images_static/abc/custom_local-one.webm",
+        is_video: true,
+      },
+    ]
+  );
+
+  assert.equal(media.length, 3);
+  assert.deepEqual(
+    {
+      source: media[0].source,
+      mediaType: media[0].mediaType,
+      prompt: media[0].prompt,
+      negativePrompt: media[0].negativePrompt,
+      username: media[0].username,
+      steps: media[0].steps,
+      cfgScale: media[0].cfgScale,
+    },
+    {
+      source: "Community creation",
+      mediaType: "video",
+      prompt: "community prompt",
+      negativePrompt: "community negative",
+      username: "artist",
+      steps: 20,
+      cfgScale: 4.5,
+    }
+  );
+  assert.equal(media[0].url.includes("/api/lm/previews"), true);
+  assert.equal(media[0].nsfwLevel, 16);
+  assert.equal(media[1].prompt, "example prompt");
+  assert.equal(media[1].negativePrompt, "example negative");
+  assert.equal(media[1].sampler, "Euler");
+  assert.equal(media[1].seed, 12);
+  assert.equal(media[1].width, 640);
+  assert.equal(media[1].height, 480);
+  assert.equal(media[1].modelName, "Example checkpoint");
+  assert.equal(media[1].clipSkip, 2);
+  assert.equal(media[2].url, "/example_images_static/abc/custom_local-one.webm");
+  assert.equal(media[2].mediaType, "video");
+  assert.equal(media[2].prompt, "local custom prompt");
+});
+
+test("optimizes Civitai media and normalizes mature-content settings", () => {
+  const media = normalizeSharedMedia([], {
+    images: [
+      {
+        id: 1,
+        url: "https://image.civitai.com/example/original=true/video.mp4",
+        type: "video",
+      },
+    ],
+  });
+  assert.equal(media.length, 1);
+  assert.match(media[0].url, /transcode=true,width=450,optimized=true/);
+
+  assert.deepEqual(
+    normalizeMediaSettings({
+      blur_mature_content: false,
+      mature_blur_level: "XXX",
+      show_only_sfw: true,
+    }),
+    {
+      blurMatureContent: false,
+      matureBlurLevel: 16,
+      showOnlySfw: true,
+    }
+  );
 });
 
 test("extracts stock and numbered LoRA loader widgets", () => {

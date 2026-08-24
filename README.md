@@ -102,7 +102,8 @@ All nodes appear under the **Lora Manager** category in the ComfyUI node menu, w
 
 Selecting a LoRA loader opens the **LoRA Info** sidebar and follows the node's current selection. It supports the stock ComfyUI loader, LM Remote nodes, and third-party loaders that expose standard `lora_name`, numbered LoRA, stack, or `<lora:name:strength>` values.
 
-- If the selected LoRA is indexed by the remote LoRA Manager, the sidebar shows its preview, file details, base model, trigger words, tags, usage tips, and direct model links.
+- If the selected LoRA is indexed by the remote LoRA Manager, the sidebar shows its image or video preview, file details, base model, trigger words, tags, usage tips, and direct model links.
+- Cached community creations and Civitai examples appear with video controls, their shared prompt and negative prompt, generation settings, attribution, navigation, and one-click prompt copying.
 - If a node contains multiple active LoRAs, use the selector at the top of the sidebar to switch cards.
 - If no Manager card exists, the sidebar offers name searches on LoRA Manager, Civitai, Civitai Red, and CivArchive.
 - Duplicate filenames are not guessed: the sidebar asks you to choose the matching Manager path.
