@@ -58,6 +58,17 @@
   white-space: nowrap;
 }
 
+.lmri-header-actions,
+.lmri-inline-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.lmri-inline-actions {
+  margin-top: 10px;
+}
+
 .lmri-icon-button,
 .lmri-name,
 .lmri-candidate,
@@ -345,5 +356,315 @@
 @media (max-width: 360px) {
   .lmri-actions {
     grid-template-columns: 1fr;
+  }
+}
+
+.lmrc-overlay {
+  --lmrc-bg: var(--comfy-menu-bg, #18181b);
+  --lmrc-panel: var(--comfy-input-bg, #242428);
+  --lmrc-border: var(--border-color, #3a3a40);
+  --lmrc-text: var(--fg-color, #f4f4f5);
+  --lmrc-muted: var(--descrip-text, #a1a1aa);
+  --lmrc-accent: var(--primary-color, #7c3aed);
+  position: fixed;
+  z-index: 12000;
+  inset: 0;
+  display: grid;
+  padding: 20px;
+  overflow-y: auto;
+  place-items: center;
+  background: rgb(0 0 0 / 66%);
+  color: var(--lmrc-text);
+  font: 13px/1.45 Inter, system-ui, sans-serif;
+  backdrop-filter: blur(3px);
+}
+
+.lmrc-overlay *,
+.lmrc-overlay *::before,
+.lmrc-overlay *::after {
+  box-sizing: border-box;
+}
+
+.lmrc-dialog {
+  display: flex;
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 40px));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--lmrc-border);
+  border-radius: 14px;
+  outline: none;
+  background: var(--lmrc-bg);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
+}
+
+.lmrc-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px 15px;
+  border-bottom: 1px solid var(--lmrc-border);
+}
+
+.lmrc-header h2,
+.lmrc-section h3 {
+  margin: 0;
+  color: var(--lmrc-text);
+}
+
+.lmrc-header h2 {
+  font-size: 18px;
+}
+
+.lmrc-header p,
+.lmrc-section-heading p {
+  margin: 4px 0 0;
+  color: var(--lmrc-muted);
+}
+
+.lmrc-form {
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 16px 20px 18px;
+  overflow-y: auto;
+}
+
+.lmrc-section {
+  margin-bottom: 18px;
+}
+
+.lmrc-section h3 {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.lmrc-connection-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(130px, 0.7fr);
+  gap: 12px;
+  margin-top: 9px;
+}
+
+.lmrc-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.lmrc-label {
+  color: var(--lmrc-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.lmrc-input {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 7px 9px;
+  border: 1px solid var(--lmrc-border);
+  border-radius: 7px;
+  outline: none;
+  background: var(--lmrc-panel);
+  color: var(--lmrc-text);
+  font: inherit;
+}
+
+.lmrc-input:focus {
+  border-color: color-mix(in srgb, var(--lmrc-accent) 78%, white 8%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lmrc-accent) 22%, transparent);
+}
+
+.lmrc-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.lmrc-hint {
+  min-height: 16px;
+  color: var(--lmrc-muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.lmrc-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.lmrc-section-heading p {
+  max-width: 500px;
+  font-size: 11px;
+}
+
+.lmrc-mapping-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.lmrc-mapping-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 7px;
+}
+
+.lmrc-mapping-arrow {
+  color: var(--lmrc-muted);
+  text-align: center;
+}
+
+.lmrc-icon-button,
+.lmrc-button,
+.lmrc-settings-button {
+  border: 1px solid var(--lmrc-border, var(--border-color, #3a3a40));
+  border-radius: 7px;
+  background: var(--lmrc-panel, var(--comfy-input-bg, #242428));
+  color: var(--lmrc-text, var(--fg-color, #f4f4f5));
+  font: inherit;
+  cursor: pointer;
+}
+
+.lmrc-icon-button {
+  display: grid;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+}
+
+.lmrc-button,
+.lmrc-settings-button {
+  min-height: 34px;
+  padding: 7px 11px;
+}
+
+.lmrc-settings-button {
+  width: 100%;
+  text-align: left;
+}
+
+.lmrc-icon-button:hover,
+.lmrc-button:hover:not(:disabled),
+.lmrc-settings-button:hover {
+  border-color: color-mix(in srgb, var(--lmrc-accent, #7c3aed) 75%, var(--lmrc-border, #3a3a40));
+}
+
+.lmrc-button:disabled,
+.lmrc-icon-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.lmrc-primary {
+  border-color: color-mix(in srgb, var(--lmrc-accent) 72%, white 7%);
+  background: color-mix(in srgb, var(--lmrc-accent) 54%, var(--lmrc-panel));
+}
+
+.lmrc-notices {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lmrc-notice,
+.lmrc-status {
+  padding: 8px 10px;
+  border: 1px solid var(--lmrc-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--lmrc-panel) 72%, transparent);
+  color: var(--lmrc-muted);
+  font-size: 11px;
+}
+
+.lmrc-notice.warning,
+.lmrc-status.error {
+  border-color: #7f1d1d;
+  color: #fecaca;
+}
+
+.lmrc-status {
+  min-height: 35px;
+  margin-top: 10px;
+}
+
+.lmrc-status-action {
+  margin-left: 10px;
+}
+
+.lmrc-status:empty {
+  display: none;
+}
+
+.lmrc-status.success {
+  border-color: #166534;
+  color: #bbf7d0;
+}
+
+.lmrc-status.busy {
+  color: var(--lmrc-text);
+}
+
+.lmrc-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--lmrc-border);
+}
+
+.lmrc-footer-group {
+  display: flex;
+  gap: 7px;
+}
+
+@media (max-width: 620px) {
+  .lmrc-overlay {
+    padding: 8px;
+    place-items: start center;
+  }
+
+  .lmrc-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+
+  .lmrc-connection-grid,
+  .lmrc-mapping-row {
+    grid-template-columns: 1fr;
+  }
+
+  .lmrc-mapping-arrow {
+    transform: rotate(90deg);
+  }
+
+  .lmrc-mapping-row .lmrc-icon-button {
+    justify-self: end;
+  }
+
+  .lmrc-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lmrc-footer-group {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .lmrc-status-action {
+    display: block;
+    width: 100%;
+    margin: 8px 0 0;
   }
 }

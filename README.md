@@ -40,15 +40,13 @@ git clone https://github.com/ethanfel/ComfyUI-LM-Remote.git
 
 ## Configuration
 
-Edit `config.json` in the package directory:
+Open the configuration panel from any of these places:
 
-```json
-{
-    "remote_url": "http://192.168.1.3:8188",
-    "timeout": 30,
-    "path_mappings": {}
-}
-```
+- Click the gear in the **LoRA Info** sidebar
+- Open **Settings**, select **LM Remote**, then click **Configure LM Remote**
+- Run **Configure LM Remote** from the command palette
+
+Enter the remote URL, adjust the timeout if needed, and click **Test connection**. **Save** validates the settings and applies them to new requests immediately; the ComfyUI process does not need to restart. If the remote URL changes, the panel offers a page reload so Manager assets and live progress reconnect to the new server. Save workflow edits before using it.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -56,14 +54,19 @@ Edit `config.json` in the package directory:
 | `timeout` | int | `30` | HTTP request timeout in seconds |
 | `path_mappings` | object | `{}` | Remote-to-local path prefix mapping (see below) |
 
+Configuration is stored under `<ComfyUI user directory>/ComfyUI-LM-Remote/config.json`, outside the custom-node checkout. An existing package-level `config.json` is loaded as a legacy fallback and is left untouched. The first save through the panel migrates its values into ComfyUI user data.
+
+The panel is the normal way to manage this file; manual editing is not required. For a headless or automated deployment, start from [`config.example.json`](config.example.json), place the copy outside the custom-node checkout, and point `LM_REMOTE_CONFIG` to it.
+
 ### Environment Variable Overrides
 
-Environment variables take priority over `config.json`:
+Environment variables take priority over the stored configuration without rewriting it. Overridden fields are shown as managed in the panel.
 
-| Variable | Overrides |
-|----------|-----------|
-| `LM_REMOTE_URL` | `remote_url` |
-| `LM_REMOTE_TIMEOUT` | `timeout` |
+| Variable | Purpose |
+|----------|---------|
+| `LM_REMOTE_URL` | Overrides `remote_url`; the field is shown as managed in the panel |
+| `LM_REMOTE_TIMEOUT` | Overrides `timeout`; the field is shown as managed in the panel |
+| `LM_REMOTE_CONFIG` | Uses an explicit configuration file instead of the ComfyUI user-data path |
 
 ### Path Mappings
 
@@ -108,6 +111,8 @@ ComfyUI does not currently expose an extension API for adding custom tabs to the
 
 Auto-open is enabled by default. Disable it under **Settings > LM Remote > LoRA Info > Auto-open** if you prefer to open **LoRA Info** manually from the sidebar or command palette.
 
+The gear beside the refresh button opens LM Remote connection settings without leaving the sidebar.
+
 ## How It Works
 
 ### Reverse Proxy
@@ -145,12 +150,14 @@ After fetching the relative path from the remote metadata, LoRA files are loaded
 
 After installation and configuration:
 
-1. Restart ComfyUI
-2. Check logs for: `[LM-Remote] Proxy routes registered -> http://192.168.1.3:8188`
-3. Open ComfyUI -- the LoRA Manager web UI should load (proxied from remote)
-4. Add a stock or remote LoRA loader and click the node -- **LoRA Info** should open
-5. Select a LoRA -- its Manager card (or external search links) should appear and remote trigger words should populate where supported
-6. Run the workflow -- the LoRA loads from local shared storage
+1. Restart ComfyUI once after installing the custom node
+2. Open **Configure LM Remote**, enter the URL, and run **Test connection**
+3. Save the configuration; no ComfyUI process restart is required
+4. If prompted after a remote URL change, save workflow edits and reload the browser page
+5. Open the LoRA Manager web UI -- it should load through the remote proxy
+6. Add a stock or remote LoRA loader and click the node -- **LoRA Info** should open
+7. Select a LoRA -- its Manager card (or external search links) should appear and remote trigger words should populate where supported
+8. Run the workflow -- the LoRA loads from local shared storage
 
 ## License
 

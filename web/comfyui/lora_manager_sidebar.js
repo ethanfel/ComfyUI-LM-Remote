@@ -11,9 +11,12 @@ import {
   normalizeLoraIdentifier,
   normalizeUsageTips,
 } from "./lora_manager_sidebar_utils.js";
+import { openRemoteConfigDialog } from "./remote_config_dialog.js";
 
 const TAB_ID = "lm-remote-lora-info";
 const COMMAND_ID = "LMRemote.OpenLoraInfo";
+const CONFIG_COMMAND_ID = "LMRemote.Configure";
+const CONFIG_SETTING_ID = "LMRemote.Connection.Configure";
 const AUTO_OPEN_SETTING = "LMRemote.LoraInfo.AutoOpen";
 const STYLE_ID = "lm-remote-lora-info-style";
 const NODE_SELECTION_HOOK = Symbol.for("lmRemote.loraInfo.nodeSelectionHook");
@@ -43,6 +46,26 @@ function ensureStyles() {
   link.rel = "stylesheet";
   link.href = new URL("./lora_manager_sidebar.css", import.meta.url).href;
   document.head.appendChild(link);
+}
+
+function openConfiguration() {
+  ensureStyles();
+  openRemoteConfigDialog({
+    onSaved: () => {
+      if (activeName) lookupActiveName();
+    },
+  });
+}
+
+function configureSettingControl() {
+  const button = createElement(
+    "button",
+    "lmrc-settings-button",
+    "Configure LM Remote…"
+  );
+  button.type = "button";
+  button.addEventListener("click", openConfiguration);
+  return button;
 }
 
 function selectedNodeLabel() {
@@ -197,7 +220,12 @@ function renderError(content) {
   const retry = createElement("button", "lmri-button", "Try again");
   retry.type = "button";
   retry.addEventListener("click", () => lookupActiveName());
-  panel.appendChild(retry);
+  const configure = createElement("button", "lmri-button", "Configure");
+  configure.type = "button";
+  configure.addEventListener("click", openConfiguration);
+  const actions = createElement("div", "lmri-inline-actions");
+  actions.append(retry, configure);
+  panel.appendChild(actions);
   appendSearchActions(panel, activeName);
   content.appendChild(panel);
 }
@@ -361,7 +389,15 @@ function renderSidebar() {
   refresh.appendChild(createElement("i", "pi pi-refresh"));
   refresh.disabled = !activeName || lookupState.status === "loading";
   refresh.addEventListener("click", () => lookupActiveName());
-  header.append(heading, refresh);
+  const configure = createElement("button", "lmri-icon-button");
+  configure.type = "button";
+  configure.title = "Configure LM Remote";
+  configure.setAttribute("aria-label", configure.title);
+  configure.appendChild(createElement("i", "pi pi-cog"));
+  configure.addEventListener("click", openConfiguration);
+  const headerActions = createElement("div", "lmri-header-actions");
+  headerActions.append(configure, refresh);
+  header.append(heading, headerActions);
   sidebarRoot.appendChild(header);
 
   if (selectedNames.length > 1) {
@@ -424,7 +460,9 @@ async function fallbackListLookup(name, signal) {
     search: term,
     fuzzy_search: "true",
   });
-  const response = await api.fetchApi(`/lm/loras/list?${params}`, { signal });
+  const response = await api.fetchApi(`/api/lm/loras/list?${params}`, {
+    signal,
+  });
   if (!response.ok) throw new Error(await responseError(response));
   const payload = await response.json();
   const result = matchModelItems(name, payload.items);
@@ -437,7 +475,7 @@ async function fallbackListLookup(name, signal) {
 
 async function resolveManagerCard(name, signal) {
   const response = await api.fetchApi(
-    `/lm/loras/resolve?name=${encodeURIComponent(name)}`,
+    `/api/lm/loras/resolve?name=${encodeURIComponent(name)}`,
     { signal }
   );
   if (response.status === 404) {
@@ -658,6 +696,14 @@ app.registerExtension({
   name: "LoraManager.RemoteLoraInfoSidebar",
   settings: [
     {
+      id: CONFIG_SETTING_ID,
+      name: "Remote LoRA Manager",
+      type: configureSettingControl,
+      defaultValue: "",
+      category: ["LM Remote", "Connection", "Configure"],
+      tooltip: "Set the remote URL, timeout, and path mappings.",
+    },
+    {
       id: AUTO_OPEN_SETTING,
       name: "Open LoRA Info when selecting a LoRA loader",
       type: "boolean",
@@ -666,6 +712,12 @@ app.registerExtension({
     },
   ],
   commands: [
+    {
+      id: CONFIG_COMMAND_ID,
+      label: "Configure LM Remote",
+      icon: "pi pi-cog",
+      function: openConfiguration,
+    },
     {
       id: COMMAND_ID,
       label: "Open LoRA Info",
