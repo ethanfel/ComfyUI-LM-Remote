@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   buildExternalLinks,
+  closeActiveSidebarTab,
   extractLoraNames,
+  getActiveSidebarTabId,
   getSelectedGraphNodes,
   isVideoMedia,
   matchModelItems,
@@ -13,6 +15,64 @@ import {
   normalizeSharedMedia,
   normalizeUsageTips,
 } from "../../web/comfyui/lora_manager_sidebar_utils.js";
+
+test("closes only the active LoRA sidebar across ComfyUI API shapes", () => {
+  const managed = {
+    activeSidebarTabId: "lm-remote-lora-info",
+    setActiveSidebarTab(id) {
+      this.activeSidebarTabId = id;
+    },
+  };
+  assert.equal(
+    closeActiveSidebarTab(managed, "lm-remote-lora-info"),
+    true
+  );
+  assert.equal(getActiveSidebarTabId(managed), null);
+
+  const activeRef = { value: "lm-remote-lora-info" };
+  const refManager = { sidebarTab: { activeSidebarTabId: activeRef } };
+  assert.equal(
+    closeActiveSidebarTab(refManager, "lm-remote-lora-info"),
+    true
+  );
+  assert.equal(activeRef.value, null);
+
+  let otherTabToggleCount = 0;
+  const otherTabManager = {
+    sidebarTab: {
+      activeSidebarTabId: "node-library",
+      toggleSidebarTab() {
+        otherTabToggleCount += 1;
+      },
+    },
+  };
+  assert.equal(
+    closeActiveSidebarTab(otherTabManager, "lm-remote-lora-info"),
+    false
+  );
+  assert.equal(otherTabToggleCount, 0);
+});
+
+test("falls back to a guarded toggle for readonly sidebar state", () => {
+  let activeId = "lm-remote-lora-info";
+  let toggleCount = 0;
+  const sidebarTab = {
+    toggleSidebarTab(tabId) {
+      toggleCount += 1;
+      activeId = activeId === tabId ? null : tabId;
+    },
+  };
+  Object.defineProperty(sidebarTab, "activeSidebarTabId", {
+    get: () => activeId,
+  });
+
+  assert.equal(
+    closeActiveSidebarTab({ sidebarTab }, "lm-remote-lora-info"),
+    true
+  );
+  assert.equal(activeId, null);
+  assert.equal(toggleCount, 1);
+});
 
 test("normalizes loader paths and weight extensions", () => {
   assert.equal(

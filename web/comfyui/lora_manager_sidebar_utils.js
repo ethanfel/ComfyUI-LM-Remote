@@ -395,6 +395,69 @@ export function normalizeMediaSettings(value) {
   };
 }
 
+function unwrapSidebarValue(value) {
+  return value && typeof value === "object" && "value" in value
+    ? value.value
+    : value;
+}
+
+export function getActiveSidebarTabId(manager) {
+  if (!manager) return null;
+  const sidebar = manager.sidebarTab || manager;
+  return unwrapSidebarValue(
+    sidebar?.activeSidebarTabId ?? manager.activeSidebarTabId
+  );
+}
+
+export function closeActiveSidebarTab(manager, tabId) {
+  if (!manager || getActiveSidebarTabId(manager) !== tabId) return false;
+  const sidebar = manager.sidebarTab || manager;
+
+  if (typeof manager.setActiveSidebarTab === "function") {
+    try {
+      manager.setActiveSidebarTab(null);
+      if (getActiveSidebarTabId(manager) !== tabId) return true;
+    } catch {
+      // Older frontend wrappers may reject null.
+    }
+  }
+
+  if (
+    sidebar &&
+    (typeof sidebar === "object" || typeof sidebar === "function") &&
+    "activeSidebarTabId" in sidebar
+  ) {
+    try {
+      const current = sidebar.activeSidebarTabId;
+      if (current && typeof current === "object" && "value" in current) {
+        current.value = null;
+      } else {
+        sidebar.activeSidebarTabId = null;
+      }
+      if (getActiveSidebarTabId(manager) !== tabId) return true;
+    } catch {
+      // Some frontend versions expose a readonly store property.
+    }
+  }
+
+  const toggleTargets = sidebar === manager ? [sidebar] : [sidebar, manager];
+  for (const target of toggleTargets) {
+    if (typeof target?.toggleSidebarTab !== "function") continue;
+    try {
+      target.toggleSidebarTab(tabId);
+      if (getActiveSidebarTabId(manager) !== tabId) return true;
+    } catch {
+      // Try the remaining compatibility paths.
+    }
+  }
+
+  if (typeof manager.command?.execute === "function") {
+    manager.command.execute(`Workspace.ToggleSidebarTab.${tabId}`);
+    return true;
+  }
+  return false;
+}
+
 export function extractLoraSyntax(value) {
   if (typeof value !== "string") return [];
   const names = [];

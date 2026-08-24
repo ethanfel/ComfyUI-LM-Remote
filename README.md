@@ -105,6 +105,7 @@ Selecting a LoRA loader opens the **LoRA Info** sidebar and follows the node's c
 - If the selected LoRA is indexed by the remote LoRA Manager, the sidebar shows its image or video preview, file details, base model, trigger words, tags, usage tips, and direct model links.
 - Cached community creations and Civitai examples appear with video controls, their shared prompt and negative prompt, generation settings, attribution, navigation, and one-click prompt copying.
 - If a node contains multiple active LoRAs, use the selector at the top of the sidebar to switch cards.
+- LoRA Info closes automatically after the selected LoRA loader is cleared, but stays open while switching directly between loaders.
 - If no Manager card exists, the sidebar offers name searches on LoRA Manager, Civitai, Civitai Red, and CivArchive.
 - Duplicate filenames are not guessed: the sidebar asks you to choose the matching Manager path.
 

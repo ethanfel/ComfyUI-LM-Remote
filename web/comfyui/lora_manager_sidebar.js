@@ -4,7 +4,9 @@ import { api } from "../../scripts/api.js";
 import {
   buildExternalLinks,
   cleanLoraName,
+  closeActiveSidebarTab,
   extractLoraNames,
+  getActiveSidebarTabId,
   getSelectedGraphNodes,
   isVideoMedia,
   loraSearchTerm,
@@ -27,6 +29,7 @@ const NODE_SELECTION_HOOK = Symbol.for("lmRemote.loraInfo.nodeSelectionHook");
 const CANVAS_SELECTION_HOOK = Symbol.for("lmRemote.loraInfo.canvasSelectionHook");
 const MAX_SHARED_MEDIA = 40;
 const MATURE_MEDIA_LEVEL = 4;
+const SIDEBAR_CLOSE_DELAY_MS = 80;
 
 let sidebarRoot = null;
 let selectedNode = null;
@@ -37,6 +40,7 @@ let lookupState = { status: "idle" };
 let lookupGeneration = 0;
 let lookupController = null;
 let monitorTimer = null;
+let sidebarCloseTimer = null;
 
 function createElement(tag, className, text) {
   const element = document.createElement(tag);
@@ -1030,27 +1034,15 @@ function autoOpenEnabled() {
   return app.extensionManager?.setting?.get?.(AUTO_OPEN_SETTING) !== false;
 }
 
-function unwrapValue(value) {
-  return value && typeof value === "object" && "value" in value
-    ? value.value
-    : value;
-}
-
-function activeSidebarId(manager, sidebar) {
-  return unwrapValue(
-    sidebar?.activeSidebarTabId ?? manager?.activeSidebarTabId
-  );
-}
-
 function openSidebarTab() {
   const manager = app.extensionManager;
   if (!manager) return false;
   const sidebar = manager.sidebarTab || manager;
-  if (activeSidebarId(manager, sidebar) === TAB_ID) return true;
+  if (getActiveSidebarTabId(manager) === TAB_ID) return true;
 
   if (typeof manager.setActiveSidebarTab === "function") {
     manager.setActiveSidebarTab(TAB_ID);
-    if (activeSidebarId(manager, sidebar) === TAB_ID) return true;
+    if (getActiveSidebarTabId(manager) === TAB_ID) return true;
   }
 
   if (sidebar && "activeSidebarTabId" in sidebar) {
@@ -1064,7 +1056,7 @@ function openSidebarTab() {
     } catch {
       // Some frontend versions expose a readonly store property.
     }
-    if (activeSidebarId(manager, sidebar) === TAB_ID) return true;
+    if (getActiveSidebarTabId(manager) === TAB_ID) return true;
   }
 
   if (typeof sidebar?.toggleSidebarTab === "function") {
@@ -1082,10 +1074,29 @@ function openSidebarTab() {
   return false;
 }
 
+function cancelSidebarClose() {
+  if (sidebarCloseTimer == null) return;
+  window.clearTimeout(sidebarCloseTimer);
+  sidebarCloseTimer = null;
+}
+
+function scheduleSidebarClose() {
+  cancelSidebarClose();
+  sidebarCloseTimer = window.setTimeout(() => {
+    sidebarCloseTimer = null;
+    const nodes = getSelectedGraphNodes(app.canvas);
+    const node = nodes.length === 1 ? nodes[0] : null;
+    if (node && extractLoraNames(node).length) return;
+    closeActiveSidebarTab(app.extensionManager, TAB_ID);
+  }, SIDEBAR_CLOSE_DELAY_MS);
+}
+
 function updateSelection({ autoOpen = false, force = false } = {}) {
   const nodes = getSelectedGraphNodes(app.canvas);
   const node = nodes.length === 1 ? nodes[0] : null;
   const names = node ? extractLoraNames(node) : [];
+  const shouldCloseSidebar = selectedNames.length > 0 && names.length === 0;
+  if (names.length) cancelSidebarClose();
   const signature = `${node?.id ?? ""}|${names
     .map(normalizeLoraIdentifier)
     .join("|")}`;
@@ -1112,6 +1123,8 @@ function updateSelection({ autoOpen = false, force = false } = {}) {
   if (activeName) {
     if (autoOpen && autoOpenEnabled()) openSidebarTab();
     lookupActiveName();
+  } else if (shouldCloseSidebar) {
+    scheduleSidebarClose();
   }
 }
 
@@ -1169,6 +1182,7 @@ function registerSidebarTab() {
       updateSelection({ force: true });
     },
     destroy() {
+      cancelSidebarClose();
       lookupGeneration += 1;
       lookupController?.abort();
       sidebarRoot?.remove();
