@@ -95,6 +95,19 @@ All nodes appear under the **Lora Manager** category in the ComfyUI node menu, w
 | **WanVideo Lora Select (Remote)** | Select LoRAs for WanVideo with block-level control. |
 | **WanVideo Lora Select From Text (Remote)** | Select WanVideo LoRAs from text syntax. |
 
+## LoRA Info Sidebar
+
+Selecting a LoRA loader opens the **LoRA Info** sidebar and follows the node's current selection. It supports the stock ComfyUI loader, LM Remote nodes, and third-party loaders that expose standard `lora_name`, numbered LoRA, stack, or `<lora:name:strength>` values.
+
+- If the selected LoRA is indexed by the remote LoRA Manager, the sidebar shows its preview, file details, base model, trigger words, tags, usage tips, and direct model links.
+- If a node contains multiple active LoRAs, use the selector at the top of the sidebar to switch cards.
+- If no Manager card exists, the sidebar offers name searches on LoRA Manager, Civitai, Civitai Red, and CivArchive.
+- Duplicate filenames are not guessed: the sidebar asks you to choose the matching Manager path.
+
+ComfyUI does not currently expose an extension API for adding custom tabs to the built-in Properties panel, so this feature uses its supported custom-sidebar API. It follows ComfyUI's configured sidebar location, including a right-side layout like Templates.
+
+Auto-open is enabled by default. Disable it under **Settings > LM Remote > LoRA Info > Auto-open** if you prefer to open **LoRA Info** manually from the sidebar or command palette.
+
 ## How It Works
 
 ### Reverse Proxy
@@ -105,7 +118,7 @@ An aiohttp middleware is registered at startup that intercepts requests to LoRA 
 - `/api/lm/*` -- all REST API endpoints (except send_sync routes below)
 - `/extensions/ComfyUI-Lora-Manager/*` -- widget JS files and Vue widget bundle
 - `/loras_static/*`, `/locales/*`, `/example_images_static/*` -- static assets
-- `/loras`, `/checkpoints`, `/embeddings`, `/loras/recipes`, `/statistics` -- web UI pages
+- `/loras`, `/checkpoints`, `/embeddings`, `/loras/recipes`, `/community`, `/statistics` -- web UI pages
 - `/ws/fetch-progress`, `/ws/download-progress`, `/ws/init-progress` -- WebSocket connections
 
 **Handled locally** (events broadcast to local browser via `send_sync`):
@@ -135,8 +148,8 @@ After installation and configuration:
 1. Restart ComfyUI
 2. Check logs for: `[LM-Remote] Proxy routes registered -> http://192.168.1.3:8188`
 3. Open ComfyUI -- the LoRA Manager web UI should load (proxied from remote)
-4. Add a "Lora Loader (Remote, LoraManager)" node to a workflow
-5. Select a LoRA -- trigger words should populate from remote metadata
+4. Add a stock or remote LoRA loader and click the node -- **LoRA Info** should open
+5. Select a LoRA -- its Manager card (or external search links) should appear and remote trigger words should populate where supported
 6. Run the workflow -- the LoRA loads from local shared storage
 
 ## License

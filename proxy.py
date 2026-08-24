@@ -38,6 +38,7 @@ _PROXY_PAGE_ROUTES = {
     "/checkpoints",
     "/embeddings",
     "/loras/recipes",
+    "/community",
     "/statistics",
 }
 

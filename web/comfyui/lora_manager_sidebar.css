@@ -1,0 +1,349 @@
+.lmri-root {
+  --lmri-bg: var(--comfy-menu-bg, #18181b);
+  --lmri-panel: var(--comfy-input-bg, #242428);
+  --lmri-border: var(--border-color, #3a3a40);
+  --lmri-text: var(--fg-color, #f4f4f5);
+  --lmri-muted: var(--descrip-text, #a1a1aa);
+  --lmri-accent: var(--primary-color, #7c3aed);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--lmri-bg);
+  color: var(--lmri-text);
+  font: 13px/1.45 Inter, system-ui, sans-serif;
+}
+
+.lmri-root *,
+.lmri-root *::before,
+.lmri-root *::after {
+  box-sizing: border-box;
+}
+
+.lmri-header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 14px 11px;
+  border-bottom: 1px solid var(--lmri-border);
+  background: color-mix(in srgb, var(--lmri-bg) 94%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.lmri-header h1,
+.lmri-card h2,
+.lmri-notice h3,
+.lmri-empty h3 {
+  margin: 0;
+  color: var(--lmri-text);
+}
+
+.lmri-header h1 {
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.lmri-header p {
+  max-width: 240px;
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--lmri-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lmri-icon-button,
+.lmri-name,
+.lmri-candidate,
+.lmri-button {
+  border: 1px solid var(--lmri-border);
+  color: var(--lmri-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.lmri-icon-button {
+  display: grid;
+  flex: 0 0 30px;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--lmri-panel);
+}
+
+.lmri-icon-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.lmri-name-selector {
+  display: flex;
+  gap: 6px;
+  padding: 10px 12px 2px;
+  overflow-x: auto;
+}
+
+.lmri-name {
+  flex: 0 0 auto;
+  max-width: 190px;
+  padding: 6px 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--lmri-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lmri-name.active {
+  border-color: color-mix(in srgb, var(--lmri-accent) 70%, white 10%);
+  background: color-mix(in srgb, var(--lmri-accent) 24%, transparent);
+  color: var(--lmri-text);
+}
+
+.lmri-content {
+  padding: 12px;
+}
+
+.lmri-state,
+.lmri-empty {
+  display: flex;
+  min-height: 230px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--lmri-muted);
+  text-align: center;
+}
+
+.lmri-empty-icon {
+  color: var(--lmri-accent);
+  font-size: 28px;
+}
+
+.lmri-empty p {
+  max-width: 280px;
+  margin: 0;
+}
+
+.lmri-card,
+.lmri-notice {
+  overflow: hidden;
+  border: 1px solid var(--lmri-border);
+  border-radius: 12px;
+  background: var(--lmri-panel);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 18%);
+}
+
+.lmri-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  background: #101012;
+}
+
+.lmri-preview img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.lmri-card-body,
+.lmri-notice {
+  padding: 13px;
+}
+
+.lmri-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.lmri-card h2 {
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.lmri-file-name {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  color: var(--lmri-muted);
+  font-size: 11px;
+}
+
+.lmri-flags {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #facc15;
+  font-size: 15px;
+}
+
+.lmri-update {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #166534;
+  color: #dcfce7;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.lmri-metadata {
+  margin-top: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--lmri-border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--lmri-bg) 58%, transparent);
+}
+
+.lmri-usage-tips {
+  margin-top: 0;
+}
+
+.lmri-meta-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 0.8fr) minmax(0, 1.5fr);
+  gap: 8px;
+  padding: 3px 0;
+}
+
+.lmri-meta-label {
+  color: var(--lmri-muted);
+}
+
+.lmri-meta-value {
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.lmri-section-title,
+.lmri-copy h3 {
+  margin: 13px 0 6px;
+  color: var(--lmri-muted);
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.lmri-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.lmri-pill {
+  max-width: 100%;
+  padding: 4px 7px;
+  overflow: hidden;
+  border: 1px solid var(--lmri-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--lmri-bg) 56%, transparent);
+  color: var(--lmri-muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+}
+
+.lmri-triggers .lmri-pill {
+  border-color: color-mix(in srgb, var(--lmri-accent) 52%, var(--lmri-border));
+  color: var(--lmri-text);
+}
+
+.lmri-copy p {
+  margin: 0;
+  color: var(--lmri-text);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.lmri-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.lmri-primary-actions {
+  grid-template-columns: 1fr;
+  margin-top: 14px;
+}
+
+.lmri-button {
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--lmri-bg) 70%, transparent);
+  text-align: center;
+  text-decoration: none;
+}
+
+.lmri-button:hover,
+.lmri-icon-button:hover:not(:disabled),
+.lmri-candidate:hover {
+  border-color: color-mix(in srgb, var(--lmri-accent) 75%, var(--lmri-border));
+  background: color-mix(in srgb, var(--lmri-accent) 18%, var(--lmri-bg));
+}
+
+.lmri-manager {
+  border-color: color-mix(in srgb, var(--lmri-accent) 68%, var(--lmri-border));
+  background: color-mix(in srgb, var(--lmri-accent) 24%, var(--lmri-bg));
+}
+
+.lmri-civitai-red {
+  border-color: #7f1d1d;
+  color: #fecaca;
+}
+
+.lmri-notice h3 {
+  font-size: 14px;
+}
+
+.lmri-notice p {
+  margin: 7px 0 12px;
+  color: var(--lmri-muted);
+}
+
+.lmri-error {
+  border-color: #7f1d1d;
+}
+
+.lmri-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lmri-candidate {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  flex-direction: column;
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--lmri-bg) 65%, transparent);
+  text-align: left;
+}
+
+.lmri-candidate span {
+  color: var(--lmri-muted);
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 360px) {
+  .lmri-actions {
+    grid-template-columns: 1fr;
+  }
+}
