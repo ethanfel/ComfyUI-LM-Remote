@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import json
 import sys
@@ -9,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from aiohttp import web
+from aiohttp.test_utils import TestServer
 
 
 @pytest.fixture(scope="module")
@@ -624,6 +626,109 @@ async def test_proxy_session_does_not_retain_remote_cookies(
 
     assert isinstance(captured["cookie_jar"], proxy.aiohttp.DummyCookieJar)
     await proxy._close_all_proxy_sessions()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "job_path",
+    [
+        "/api/lm/community-images/fetch",
+        "/api/lm/community-images/refresh-model",
+    ],
+)
+async def test_community_job_outlives_lookup_timeout_and_remains_cancellable(
+    isolated_proxy, modules, job_path
+):
+    proxy, config = isolated_proxy
+    started = asyncio.Event()
+    finish = asyncio.Event()
+
+    async def job_handler(request):
+        assert await request.json() == {"hashes": ["example-hash"]}
+        started.set()
+        await finish.wait()
+        return web.json_response({"success": True, "stored": 2})
+
+    async def cancel_handler(request):
+        finish.set()
+        return web.json_response({"success": True, "cancelled": True})
+
+    upstream = web.Application()
+    upstream.router.add_post(job_path, job_handler)
+    upstream.router.add_post("/api/lm/community-images/cancel", cancel_handler)
+    async with TestServer(upstream) as server:
+        # A short normal timeout keeps the real HTTP regression test fast.
+        snapshot = modules.config.ConfigSnapshot(
+            config.generation, str(server.make_url("")).rstrip("/"), 0.05, ()
+        )
+        task = asyncio.create_task(
+            proxy._proxy_http(
+                DummyRequest(
+                    method="POST",
+                    path=job_path,
+                    payload={"hashes": ["example-hash"]},
+                ),
+                snapshot,
+            )
+        )
+        try:
+            await asyncio.wait_for(started.wait(), timeout=2)
+            await asyncio.sleep(0.15)
+            assert not task.done(), "community fetch hit the normal lookup timeout"
+            cancelled = await proxy._proxy_http(
+                DummyRequest(method="POST", path="/api/lm/community-images/cancel"),
+                snapshot,
+            )
+            assert cancelled.status == 200
+            assert response_json(cancelled)["cancelled"] is True
+            response = await asyncio.wait_for(task, timeout=2)
+            assert response.status == 200
+            assert response_json(response) == {"success": True, "stored": 2}
+        finally:
+            finish.set()
+            if not task.done():
+                task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+            await proxy._close_all_proxy_sessions()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/api/lm/community-images/status"),
+        ("POST", "/api/lm/community-images/cancel"),
+        ("POST", "/api/lm/community-images/by-hashes"),
+        ("GET", "/api/lm/community-images/fetch"),
+    ],
+)
+async def test_normal_community_requests_still_time_out_with_clear_error(
+    isolated_proxy, modules, method, path
+):
+    proxy, config = isolated_proxy
+    finish = asyncio.Event()
+
+    async def slow_handler(request):
+        await finish.wait()
+        return web.json_response({"success": True})
+
+    upstream = web.Application()
+    upstream.router.add_route(method, path, slow_handler)
+    async with TestServer(upstream) as server:
+        snapshot = modules.config.ConfigSnapshot(
+            config.generation, str(server.make_url("")).rstrip("/"), 0.05, ()
+        )
+        try:
+            response = await asyncio.wait_for(
+                proxy._proxy_http(DummyRequest(method=method, path=path), snapshot),
+                timeout=2,
+            )
+            assert response.status == 504
+            assert "timed out" in response_json(response)["error"]
+            assert "may still be running" in response_json(response)["error"]
+        finally:
+            finish.set()
+            await proxy._close_all_proxy_sessions()
 
 
 @pytest.mark.asyncio

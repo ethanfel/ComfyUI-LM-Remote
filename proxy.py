@@ -38,6 +38,12 @@ _MAX_CONFIG_BODY = 64 * 1024
 _MAX_TEST_RESPONSE = 64 * 1024
 _MEDIA_STREAM_CHUNK_SIZE = 64 * 1024
 _MEDIA_IDLE_TIMEOUT = 300
+_COMMUNITY_FETCH_ROUTES = frozenset(
+    {
+        "/api/lm/community-images/fetch",
+        "/api/lm/community-images/refresh-model",
+    }
+)
 
 # ---------------------------------------------------------------------------
 # URL prefixes that should be forwarded to the remote LoRA Manager
@@ -772,6 +778,15 @@ async def _proxy_http(
                         "auto_decompress": False,
                     }
                 )
+            elif request.method == "POST" and request.path in _COMMUNITY_FETCH_ROUTES:
+                # Community jobs only send a response when finished. Progress
+                # and cancellation use separate WebSocket/HTTP connections.
+                request_options["timeout"] = aiohttp.ClientTimeout(
+                    total=None,
+                    connect=min(snapshot.timeout, 30),
+                    sock_connect=min(snapshot.timeout, 30),
+                    sock_read=None,
+                )
             async with session.request(
                 **request_options,
             ) as resp:
@@ -822,8 +837,23 @@ async def _proxy_http(
             )
             return downstream
         logger.error(
-            "[LM-Remote] Proxy error for %s %s: %s", request.method, request.path, exc
+            "[LM-Remote] Proxy error for %s %s (%s): %s",
+            request.method,
+            request.path,
+            type(exc).__name__,
+            exc,
         )
+        if isinstance(exc, asyncio.TimeoutError):
+            return web.json_response(
+                {
+                    "error": (
+                        "Remote LoRA Manager request timed out. "
+                        "The operation may still be running on the Manager; "
+                        "check its progress before retrying."
+                    )
+                },
+                status=504,
+            )
         return web.json_response(
             {"error": "Remote LoRA Manager unavailable."},
             status=502,
