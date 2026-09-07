@@ -42,6 +42,7 @@ _COMMUNITY_FETCH_ROUTES = frozenset(
     {
         "/api/lm/community-images/fetch",
         "/api/lm/community-images/refresh-model",
+        "/api/lm/examples/inspect",
     }
 )
 

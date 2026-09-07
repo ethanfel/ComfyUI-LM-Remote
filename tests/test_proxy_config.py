@@ -634,6 +634,7 @@ async def test_proxy_session_does_not_retain_remote_cookies(
     [
         "/api/lm/community-images/fetch",
         "/api/lm/community-images/refresh-model",
+        "/api/lm/examples/inspect",
     ],
 )
 async def test_community_job_outlives_lookup_timeout_and_remains_cancellable(
